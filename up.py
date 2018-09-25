@@ -6,6 +6,8 @@ import urllib.request
 import json
 from datetime import datetime
 import threading
+import hmac
+import hashlib
 
 # 取引所に命令を送るためのクラス(状態保有あり)
 class Exchange:
@@ -70,6 +72,8 @@ class ExchangeCharacterBase:
 class BitFlyer(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitFlyer'
+        self.api_key = os.environ['BF_KEY']
+        self.api_key_s = os.environ['BF_KEY_S']
         default = {
             'url_public'  : 'https://api.bitflyer.com',
             'url_private' : 'https://api.bitflyer.com',
@@ -120,6 +124,8 @@ class BitFlyer(ExchangeCharacterBase):
 class BitBank(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitBank'
+        self.api_key = os.environ['BB_KEY']
+        self.api_key_s = os.environ['BB_KEY_S']
         default = {
             'url_public'  : 'https://public.bitbank.cc',
             'url_private' : 'https://api.bitbank.cc',
@@ -130,12 +136,12 @@ class BitBank(ExchangeCharacterBase):
                     'type'   : api_config['type']['public']
                 },
                 'balance' : {
-                    'path'   : '/user/assets',
+                    'path'   : '/v1/user/assets',
                     'method' : api_config['method']['get'],
                     'type'   : api_config['type']['private']
                 },
                 'order' : {
-                    'path'   : '/user/spot/order',
+                    'path'   : '/v1/user/spot/order',
                     'method' : api_config['method']['post'],
                     'type'   : api_config['type']['private']
                 }
@@ -143,23 +149,29 @@ class BitBank(ExchangeCharacterBase):
         }
         super().__init__(default)
 
-    # 要変更
+
     def make_request(self, command, param):
+        is_get = self.api_list[command]['method'] == api_config['method']['get']
+        is_public = self.api_list[command]['type'] == api_config['type']['public']
         header = {
             'Content-Type': 'application/json'
         }
-        url = self.url_public + self.api_list[command]['path']
-        method = 'GET' if self.api_list[command]['method'] == api_config['method']['get'] else 'POST'
+        url = (self.url_public if is_public else self.url_private) + self.api_list[command]['path']
+        method = 'GET' if is_get else 'POST'
 
-        if self.api_list[command]['type'] == api_config['type']['private']:
+        if not is_public:
             header['ACCESS-KEY'] = self.api_key
             unix_stamp = str(int(datetime.now().timestamp()))
-            header['ACCESS-TIMESTAMP'] = unix_stamp
-            raw_sign = unix_stamp + method + self.api_list[command]['path']
-            # param が空出ない場合 raw_signにparamの文字列が追加される
-            if len(param) != 0:
-                raw_sign += str(json.dumps(param).encode("utf-8"))
-            header['ACCESS-SIGN'] = hmac.new(bytes(self.api_key_s, 'ascii'), bytes(raw_sign, 'ascii'), hashlib.sha256).hexdigest()
+            header['ACCESS-NONCE'] = unix_stamp
+            raw_sign = unix_stamp
+            if is_get:
+                raw_sign += self.api_list[command]['path']
+            else:
+                # param が空出ない場合 raw_signにparamの文字列が追加される
+                if len(param) != 0:
+                    raw_sign += str(json.dumps(param).encode("utf-8"))
+
+            header['ACCESS-SIGNATURE'] = hmac.new(bytes(self.api_key_s, 'ascii'), bytes(raw_sign, 'ascii'), hashlib.sha256).hexdigest()
 
         return urllib.request.Request(url, method=method, headers=header)
 
@@ -204,29 +216,25 @@ def insert(db, table, dic):
     db.commit()
     db.quit_cursor()
 
+class myThread(threading.Thread):
+    def __init__(self, exchange):
+        super(myThread, self).__init__()
+        self.exchange = exchange
+
+    def run(self):
+        start = time.time()
+        self.exchange.get_board()
+        end = time.time()
+        print(end - start)
+
+bitbank = Exchange(BitBank())
 
 start = time.time()
 
-def bf_get():
-    bitflyer = Exchange(BitFlyer())
-    bitflyer.get_board()
-    print(time.time() - start)
-
-def bb_get():
-    bitbank = Exchange(BitBank())
-    bitbank.get_board()
-    print(time.time() - start)
-
-
-th00 = threading.Thread(target=bb_get, name="th00", args=())
-th01 = threading.Thread(target=bf_get, name="th01", args=())
-
-
-th00.start()
-th01.start()
+bitbank.get_balance()
+print(bitbank.balance)
 
 end = time.time()
-
 
 print(end - start)
 
