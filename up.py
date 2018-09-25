@@ -26,8 +26,11 @@ class Exchange:
 
     def order(self, param):
         command = 'order'
-        self.exchange.hit_api(command, param)
+        print(self.exchange.hit_api(command, param))
 
+    def get_permission(self):
+        command = 'permissions'
+        print(self.exchange.hit_api(command))
 
 api_config = {
     'method' : {
@@ -48,8 +51,10 @@ class ExchangeCharacterBase:
         self.url_private = default['url_private']
         self.api_list    = default['api_list']
         self.formatter   = {}
+        self.prepare_dic = {}
         for command in self.api_list.keys():
             self.formatter[command] = self.formatter_default
+            self.prepare_dic[command] = self.prepare_default
 
     def make_request(self):
         pass
@@ -61,11 +66,20 @@ class ExchangeCharacterBase:
             response_dic = json.loads( response.read().decode("utf-8") )
         return response_dic
 
+    # 関数の返値を成形
     @staticmethod
     def formatter_default(values):
         return values
 
+    # 関数の引数を整形
+    @staticmethod
+    def prepare_default(params):
+        return params
+
     def format(self, command, values):
+        pass
+
+    def prepare(self, command, params):
         pass
 
 
@@ -92,13 +106,19 @@ class BitFlyer(ExchangeCharacterBase):
                     'path'   : '/v1/me/sendchildorder',
                     'method' : api_config['method']['post'],
                     'type'   : api_config['type']['private']
+                },
+                'permissions' : {
+                    'path'   : '/v1/me/getpermissions',
+                    'method' : api_config['method']['get'],
+                    'type'   : api_config['type']['private']
                 }
             }
         }
         super().__init__(default)
-
+        self.prepare_dic["order"] = self.prepare_order
 
     def make_request(self, command, param):
+        param = self.prepare(command, param)
         header = {
             'Content-Type': 'application/json'
         }
@@ -112,13 +132,38 @@ class BitFlyer(ExchangeCharacterBase):
             raw_sign = unix_stamp + method + self.api_list[command]['path']
             # param が空出ない場合 raw_signにparamの文字列が追加される
             if len(param) != 0:
-                raw_sign += str(json.dumps(param).encode("utf-8"))
+                raw_sign += str(json.dumps(param))
+            print(url, method, raw_sign)
             header['ACCESS-SIGN'] = hmac.new(bytes(self.api_key_s, 'ascii'), bytes(raw_sign, 'ascii'), hashlib.sha256).hexdigest()
-
-        return urllib.request.Request(url, method=method, headers=header)
+            print(header.items)
+        return urllib.request.Request(url, method=method, headers=header, data=json.dumps(param).encode('utf-8') )
 
     def format(self, command, values):
         return self.formatter[command](values)
+
+    def prepare(self, command, params):
+        return self.prepare_dic[command](params)
+
+    def prepare_order(self, params):
+        param = {
+            "product_code": "BTC_JPY",
+            "child_order_type": "MARKET",
+            "side": ("BUY" if params['side'] == 'buy' else "SELL"),
+            "size": params['size'],
+            "minute_to_expire": 1,
+            "time_in_force": "GTC"
+        }
+        # 成行はマジで通るのでテストする時はこっち
+        # param = {
+        #     "product_code": "BTC_JPY",
+        #     "child_order_type": "LIMIT",
+        #     "side": ("BUY" if params['side'] == 'buy' else "SELL"),
+        #     "size": params['size'],
+        #     "price": 1000
+        #     "minute_to_expire": 1,
+        #     "time_in_force": "GTC"
+        # }
+        return param
 
 
 class BitBank(ExchangeCharacterBase):
@@ -227,12 +272,14 @@ class myThread(threading.Thread):
         end = time.time()
         print(end - start)
 
-bitbank = Exchange(BitBank())
+bitflyer = Exchange(BitFlyer())
 
 start = time.time()
 
-bitbank.get_balance()
-print(bitbank.balance)
+bitflyer.order({
+    'size' : 0.0130,
+    'side' : 'sell'
+})
 
 end = time.time()
 
