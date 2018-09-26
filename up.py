@@ -351,25 +351,41 @@ class myThread(threading.Thread):
         end = time.time()
         print(end - start)
 
-bitflyer = Exchange(BitFlyer())
-bitbank = Exchange(BitBank())
+class Trader:
 
-start = time.time()
+    def __init__(self, exchange0, exchange1):
+        self.ex0 = exchange0
+        self.ex1 = exchange1
+        self.ex0.get_balance()
+        self.ex1.get_balance()
+        self.threshold = {'size' : 1, 'price' : 2000}
+        self.board_is_new = [0, 0]
 
-bitflyer.order({
-    'side'  : 'buy',
-    'size'  : 0.005,
-})
-bitbank.order({
-    'side'  : 'buy',
-    'size'  : 0.005,
-})
+    def disp_balance(self):
+        print(self.ex0.exchange.name, self.ex0.balance)
+        print(self.ex1.exchange.name, self.ex1.balance)
 
-print(bitbank.last_order, bitflyer.last_order)
+    def update_balance(self, exchange):
+        exchange.get_balance()
+
+    def update_board(self, exchange):
+        exchange.get_board()
+
+    def order(self, exchange, params):
+        exchange.order(params)
+
+    def get_mean_value_from_size(self, size, exchange):
+        pass
+
+    # サイズ = threshold におけるspreadを求める
+    def get_spread(self, size):
+        pass
+
+    # 板情報を入手した直後に実行しないと意味ない
+    def max_trade_amount(self):
+        return
 
 
 
-end = time.time()
-print(end - start)
 
 exit()
