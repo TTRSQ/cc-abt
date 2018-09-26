@@ -15,6 +15,7 @@ class Exchange:
         self.exchange = exchange
         self.board = {}
         self.balance = {}
+        self.last_order = {}
 
     def get_board(self):
         command = 'board'
@@ -26,7 +27,11 @@ class Exchange:
 
     def order(self, param):
         command = 'order'
-        print(self.exchange.hit_api(command, param))
+        self.last_order = self.exchange.format(command, self.exchange.hit_api(command, param))
+
+    def order_list(self):
+        command = 'order_list'
+        print(self.exchange.hit_api(command))
 
     def get_permission(self):
         command = 'permissions'
@@ -115,6 +120,8 @@ class BitFlyer(ExchangeCharacterBase):
             }
         }
         super().__init__(default)
+        self.formatter["balance"] = self.format_balance
+        self.formatter["order"] = self.format_order
         self.prepare_dic["order"] = self.prepare_order
 
     def make_request(self, command, param):
@@ -133,36 +140,52 @@ class BitFlyer(ExchangeCharacterBase):
             # param が空出ない場合 raw_signにparamの文字列が追加される
             if len(param) != 0:
                 raw_sign += str(json.dumps(param))
-            print(url, method, raw_sign)
             header['ACCESS-SIGN'] = hmac.new(bytes(self.api_key_s, 'ascii'), bytes(raw_sign, 'ascii'), hashlib.sha256).hexdigest()
-            print(header.items)
-        return urllib.request.Request(url, method=method, headers=header, data=json.dumps(param).encode('utf-8') )
+        if len(param) != 0:
+            return urllib.request.Request(url, method=method, headers=header, data=json.dumps(param).encode('utf-8'))
+        else:
+            return urllib.request.Request(url, method=method, headers=header)
 
     def format(self, command, values):
         return self.formatter[command](values)
+
+    def format_balance(self, values):
+        ret_value = {}
+        for element in values:
+            if element['currency_code'] == 'JPY' or element['currency_code'] == 'BTC':
+                code = 'jpy' if element['currency_code'] == 'JPY' else 'btc'
+                ret_value[code] = element['available']
+        return ret_value
+
+    def format_order(self, values):
+        ret_value = {
+            'success'    : 1 if 'child_order_acceptance_id' else 0,
+            'created_at' : int(datetime.now().timestamp()*1000)
+        }
+        return ret_value
 
     def prepare(self, command, params):
         return self.prepare_dic[command](params)
 
     def prepare_order(self, params):
-        param = {
-            "product_code": "BTC_JPY",
-            "child_order_type": "MARKET",
-            "side": ("BUY" if params['side'] == 'buy' else "SELL"),
-            "size": params['size'],
-            "minute_to_expire": 1,
-            "time_in_force": "GTC"
-        }
-        # 成行はマジで通るのでテストする時はこっち
         # param = {
         #     "product_code": "BTC_JPY",
-        #     "child_order_type": "LIMIT",
+        #     "child_order_type": "MARKET",
         #     "side": ("BUY" if params['side'] == 'buy' else "SELL"),
         #     "size": params['size'],
-        #     "price": 1000
         #     "minute_to_expire": 1,
         #     "time_in_force": "GTC"
         # }
+        # 成行はマジで通るのでテストする時はこっち
+        param = {
+            "product_code": "BTC_JPY",
+            "child_order_type": "LIMIT",
+            "side": ("BUY" if params['side'] == 'buy' else "SELL"),
+            "size": params['size'],
+            "price": params['price'],
+            "minute_to_expire": 1,
+            "time_in_force": "GTC"
+        }
         return param
 
 
@@ -189,13 +212,22 @@ class BitBank(ExchangeCharacterBase):
                     'path'   : '/v1/user/spot/order',
                     'method' : api_config['method']['post'],
                     'type'   : api_config['type']['private']
+                },
+                'order_list' : {
+                    'path'   : '/v1/user/spot/orders_info',
+                    'method' : api_config['method']['post'],
+                    'type'   : api_config['type']['private']
                 }
             }
         }
         super().__init__(default)
-
+        self.formatter['board'] = self.format_board
+        self.formatter['balance'] = self.format_balance
+        self.formatter['order'] = self.format_order
+        self.prepare_dic["order"] = self.prepare_order
 
     def make_request(self, command, param):
+        param = self.prepare(command, param)
         is_get = self.api_list[command]['method'] == api_config['method']['get']
         is_public = self.api_list[command]['type'] == api_config['type']['public']
         header = {
@@ -214,14 +246,61 @@ class BitBank(ExchangeCharacterBase):
             else:
                 # param が空出ない場合 raw_signにparamの文字列が追加される
                 if len(param) != 0:
-                    raw_sign += str(json.dumps(param).encode("utf-8"))
+                    raw_sign += str(json.dumps(param))
 
             header['ACCESS-SIGNATURE'] = hmac.new(bytes(self.api_key_s, 'ascii'), bytes(raw_sign, 'ascii'), hashlib.sha256).hexdigest()
-
-        return urllib.request.Request(url, method=method, headers=header)
+        if len(param) != 0:
+            return urllib.request.Request(url, method=method, headers=header, data=json.dumps(param).encode('utf-8'))
+        else:
+            return urllib.request.Request(url, method=method, headers=header)
 
     def format(self, command, values):
         return self.formatter[command](values)
+
+    def format_board(self, values):
+        ret_value = {'bids': [], 'asks': []}
+        for element in values["data"]["bids"]:
+            ret_value['bids'].append({'price': float(element[0]), 'size': float(element[1])})
+        for element in values["data"]["asks"]:
+            ret_value['asks'].append({'price': float(element[0]), 'size': float(element[1])})
+        return ret_value
+
+    def format_balance(self, values):
+        ret_value = {}
+        for element in values['data']['assets']:
+            if element['asset'] == 'jpy' or element['asset'] == 'btc':
+                ret_value[element['asset']] = float(element['free_amount'])
+        return ret_value
+
+    def format_order(self, values):
+        ret_value = {
+            'side'       : values['data']['side'],
+            'size'       : values['data']['start_amount'],
+            'created_at' : values['data']['ordered_at'],
+            'success'    : values['success'],
+        }
+        return ret_value
+
+
+    def prepare(self, command, params):
+        return self.prepare_dic[command](params)
+
+    def prepare_order(self, params):
+        # param = {
+        #     "pair"   : "btc_jpy",
+        #     "amount" : params["size"],
+        #     "side"   : params['side'],
+        #     "type"   : "market"
+        # }
+        # 成行はマジで通るのでテストする時はこっち
+        param = {
+            "pair"   : "btc_jpy",
+            "amount" : params["size"],
+            "side"   : params["side"],
+            "price"  : params["price"],
+            "type"   : "limit"
+        }
+        return param
 
 
 class SqlController:
@@ -273,13 +352,22 @@ class myThread(threading.Thread):
         print(end - start)
 
 bitflyer = Exchange(BitFlyer())
+bitbank = Exchange(BitBank())
 
 start = time.time()
 
 bitflyer.order({
-    'size' : 0.0130,
-    'side' : 'sell'
+    'size'  : 0.01,
+    'side'  : 'buy',
+    'price' : 700000
 })
+print(bitflyer.last_order)
+bitbank.order({
+    'size'  : 0.01,
+    'side'  : 'buy',
+    'price' : 700000
+})
+print(bitbank.last_order)
 
 end = time.time()
 
