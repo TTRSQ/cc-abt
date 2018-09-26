@@ -168,25 +168,25 @@ class BitFlyer(ExchangeCharacterBase):
         return self.prepare_dic[command](params)
 
     def prepare_order(self, params):
-        # param = {
-        #     "product_code": "BTC_JPY",
-        #     "child_order_type": "MARKET",
-        #     "side": ("BUY" if params['side'] == 'buy' else "SELL"),
-        #     "size": params['size'],
-        #     "minute_to_expire": 1,
-        #     "time_in_force": "GTC"
-        # }
-        # 成行はマジで通るのでテストする時はこっち
-        param = {
-            "product_code": "BTC_JPY",
-            "child_order_type": "LIMIT",
-            "side": ("BUY" if params['side'] == 'buy' else "SELL"),
-            "size": params['size'],
-            "price": params['price'],
-            "minute_to_expire": 1,
-            "time_in_force": "GTC"
-        }
-        return param
+        if 'price' in params:
+            return {
+                "product_code": "BTC_JPY",
+                "child_order_type": "LIMIT",
+                "side": ("BUY" if params['side'] == 'buy' else "SELL"),
+                "size": params['size'],
+                "price": params['price'],
+                "minute_to_expire": 1,
+                "time_in_force": "GTC"
+            }
+        else:
+            return {
+                "product_code": "BTC_JPY",
+                "child_order_type": "MARKET",
+                "side": ("BUY" if params['side'] == 'buy' else "SELL"),
+                "size": params['size'],
+                "minute_to_expire": 1,
+                "time_in_force": "GTC"
+            }
 
 
 class BitBank(ExchangeCharacterBase):
@@ -286,21 +286,21 @@ class BitBank(ExchangeCharacterBase):
         return self.prepare_dic[command](params)
 
     def prepare_order(self, params):
-        # param = {
-        #     "pair"   : "btc_jpy",
-        #     "amount" : params["size"],
-        #     "side"   : params['side'],
-        #     "type"   : "market"
-        # }
-        # 成行はマジで通るのでテストする時はこっち
-        param = {
-            "pair"   : "btc_jpy",
-            "amount" : params["size"],
-            "side"   : params["side"],
-            "price"  : params["price"],
-            "type"   : "limit"
-        }
-        return param
+        if 'price' in params:
+            return {
+                "pair"   : "btc_jpy",
+                "amount" : params["size"],
+                "side"   : params["side"],
+                "price"  : params["price"],
+                "type"   : "limit"
+            }
+        else:
+            return {
+                "pair"   : "btc_jpy",
+                "amount" : params["size"],
+                "side"   : params['side'],
+                "type"   : "market"
+            }
 
 
 class SqlController:
@@ -357,20 +357,19 @@ bitbank = Exchange(BitBank())
 start = time.time()
 
 bitflyer.order({
-    'size'  : 0.01,
     'side'  : 'buy',
-    'price' : 700000
+    'size'  : 0.005,
 })
-print(bitflyer.last_order)
 bitbank.order({
-    'size'  : 0.01,
     'side'  : 'buy',
-    'price' : 700000
+    'size'  : 0.005,
 })
-print(bitbank.last_order)
+
+print(bitbank.last_order, bitflyer.last_order)
+
+
 
 end = time.time()
-
 print(end - start)
 
 exit()
