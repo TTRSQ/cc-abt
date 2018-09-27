@@ -340,17 +340,6 @@ def insert(db, table, dic):
     db.commit()
     db.quit_cursor()
 
-class myThread(threading.Thread):
-    def __init__(self, exchange):
-        super(myThread, self).__init__()
-        self.exchange = exchange
-
-    def run(self):
-        start = time.time()
-        self.exchange.get_board()
-        end = time.time()
-        print(end - start)
-
 class Trader:
 
     def __init__(self, exchange0, exchange1):
@@ -358,8 +347,10 @@ class Trader:
         self.ex1 = exchange1
         self.ex0.get_balance()
         self.ex1.get_balance()
-        self.threshold = {'size' : 1, 'price' : 2000}
-        self.board_is_new = [0, 0]
+        self.th0 = threading.Thread()
+        self.th1 = threading.Thread()
+        self.threshold = {'size': 1, 'price' : 1000}
+        self.cart = 0
 
     def disp_balance(self):
         print(self.ex0.exchange.name, self.ex0.balance)
@@ -371,21 +362,94 @@ class Trader:
     def update_board(self, exchange):
         exchange.get_board()
 
-    def order(self, exchange, params):
-        exchange.order(params)
+    def update_board_parallel(self):
+        self.board_is_new = 0
+
+    def order(self, exchange, side, size, exec):
+        if exec:
+            exchange.order({
+                'size' : size,
+                'side' : side
+            })
+        else:
+            print(exchange.exchange.name, side, size)
 
     def get_mean_value_from_size(self, size, exchange):
-        pass
+        calc_size = 0.0
+        sum_bid = 0.0
+        sum_ask = 0.0
+        for element in exchange.board['bids']:
+            if calc_size + element['size'] > size:
+                sum_bid += element['price']*(size - calc_size)
+                break
+            else:
+                sum_bid += element['price']*element['size']
+                calc_size += element['size']
+        calc_size = 0.0
+        for element in exchange.board['asks']:
+            if calc_size + element['size'] > size:
+                sum_ask += element['price']*(size - calc_size)
+                break
+            else:
+                sum_ask += element['price']*element['size']
+                calc_size += element['size']
+        return {'size':size, 'bid':sum_bid/size, 'ask':sum_ask/size}
 
     # サイズ = threshold におけるspreadを求める
-    def get_spread(self, size):
-        pass
+    def get_negative_spread(self, size):
+        et0 = self.get_mean_value_from_size(size, self.ex0)
+        et1 = self.get_mean_value_from_size(size, self.ex1)
+        # dir : spread
+        return {1: et1['ask']-et0['bid'], 2: et0['ask']-et1['bid']}
 
     # 板情報を入手した直後に実行しないと意味ない
-    def max_trade_amount(self):
-        return
+    def max_trade_amount(self, size):
+        et0 = self.get_mean_value_from_size(size, self.ex0)
+        et1 = self.get_mean_value_from_size(size, self.ex1)
+        e0 = min(self.ex0.balance['jpy']/et0['bid'], self.ex0.balance['btc'])
+        e1 = min(self.ex1.balance['jpy']/et1['bid'], self.ex1.balance['btc'])
+        return min(e0, e1)
 
+    # dir = 1(ex0 -> ex1),2はその逆
+    def trade(self, dir, size, exec):
+        if dir == 1:
+            self.th0 = threading.Thread(name="ex0", target=self.order, args=(self.ex0, 'buy' , size, exec, ))
+            self.th1 = threading.Thread(name="ex1", target=self.order, args=(self.ex1, 'sell', size, exec, ))
+        else:
+            self.th0 = threading.Thread(name="ex0", target=self.order, args=(self.ex0, 'sell', size, exec, ))
+            self.th1 = threading.Thread(name="ex1", target=self.order, args=(self.ex1, 'buy' , size, exec, ))
+        self.th0.start()
+        self.th1.start()
 
+    def shopping(self, exchange, exec):
+        self.update_board(exchange)
+        self.cart += 1
+        if self.cart == 2:
+            self.cart = 0
+            sp = self.get_negative_spread(self.threshold["size"])
+            size = trader.max_trade_amount(self.threshold["size"])*0.8
+            if sp[1] > sp[2]:
+                if sp[1] > self.threshold['price']:
+                    print(self.ex1.board['asks'][0]['price']-self.ex0.board['bids'][0]['price'], sp[1])
+                    self.trade(1, size, exec)
+            else:
+                if sp[2] > self.threshold['price']:
+                    print(self.ex0.board['asks'][0]['price']-self.ex1.board['bids'][0]['price'], sp[2])
+                    self.trade(2, size, exec)
+
+    def parallel_shopping(self, exec):
+        self.th0 = threading.Thread(name="ex0", target=self.shopping, args=(self.ex0, exec, ))
+        self.th1 = threading.Thread(name="ex1", target=self.shopping, args=(self.ex1, exec, ))
+        self.th0.start()
+        self.th1.start()
+
+for i in range(100):
+    start = time.time()
+    trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
+    time.sleep(0.5)
+    trader.parallel_shopping(0)
+    time.sleep(1.5)
+    print( time.time() - start)
 
 
 exit()
