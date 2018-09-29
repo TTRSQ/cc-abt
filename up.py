@@ -349,7 +349,7 @@ class Trader:
         self.ex1.get_balance()
         self.th0 = threading.Thread()
         self.th1 = threading.Thread()
-        self.threshold = {'size': 1, 'price' : 1000}
+        self.threshold = {'size': 0.1, 'price' : 2000}
         self.cart = 0
 
     def disp_balance(self):
@@ -366,11 +366,14 @@ class Trader:
         self.board_is_new = 0
 
     def order(self, exchange, side, size, exec):
+        if size < 0.005:
+            return
         if exec:
             exchange.order({
                 'size' : size,
                 'side' : side
             })
+            print(exchange.exchange.name, side, size)
         else:
             print(exchange.exchange.name, side, size)
 
@@ -400,15 +403,23 @@ class Trader:
         et0 = self.get_mean_value_from_size(size, self.ex0)
         et1 = self.get_mean_value_from_size(size, self.ex1)
         # dir : spread
-        return {1: et1['ask']-et0['bid'], 2: et0['ask']-et1['bid']}
+        return {1: et1['bid']-et0['ask'], 2: et0['bid']-et1['ask']}
 
     # 板情報を入手した直後に実行しないと意味ない
-    def max_trade_amount(self, size):
+    def max_trade_amount(self, size, rate=0.8):
         et0 = self.get_mean_value_from_size(size, self.ex0)
         et1 = self.get_mean_value_from_size(size, self.ex1)
-        e0 = min(self.ex0.balance['jpy']/et0['bid'], self.ex0.balance['btc'])
-        e1 = min(self.ex1.balance['jpy']/et1['bid'], self.ex1.balance['btc'])
-        return min(e0, e1)
+        t1 = min(self.ex0.balance['jpy']/et0['ask'], self.ex1.balance['btc'])
+        t2 = min(self.ex1.balance['jpy']/et1['ask'], self.ex0.balance['btc'])
+        return {1: t1*rate, 2: t2*rate}
+
+    # 上の関数と似ているがこちらはどこまでのサイズなら有効なスプレッドであるかをさす。
+    # TODO
+    def max_effective_size(self):
+        # transaction1
+        # お互いに一個ずつインクリメントしていい感じに出す。
+        pass
+
 
     # dir = 1(ex0 -> ex1),2はその逆
     def trade(self, dir, size, exec):
@@ -427,15 +438,16 @@ class Trader:
         if self.cart == 2:
             self.cart = 0
             sp = self.get_negative_spread(self.threshold["size"])
-            size = trader.max_trade_amount(self.threshold["size"])*0.8
+            size = trader.max_trade_amount(self.threshold["size"], 0.8)
             if sp[1] > sp[2]:
-                if sp[1] > self.threshold['price']:
-                    print(self.ex1.board['asks'][0]['price']-self.ex0.board['bids'][0]['price'], sp[1])
-                    self.trade(1, size, exec)
+                if sp[1] > self.threshold["price"]:
+                    print(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price'], sp[1])
+                    self.trade(1, side[1], exec)
             else:
-                if sp[2] > self.threshold['price']:
-                    print(self.ex0.board['asks'][0]['price']-self.ex1.board['bids'][0]['price'], sp[2])
-                    self.trade(2, size, exec)
+                if sp[2] > self.threshold["price"]:
+                    print(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price'], sp[2])
+                    self.trade(2, size[2], exec)
+
 
     def parallel_shopping(self, exec):
         self.th0 = threading.Thread(name="ex0", target=self.shopping, args=(self.ex0, exec, ))
@@ -443,13 +455,11 @@ class Trader:
         self.th0.start()
         self.th1.start()
 
-for i in range(100):
-    start = time.time()
+for i in range(1000):
     trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-    time.sleep(0.5)
-    trader.parallel_shopping(0)
-    time.sleep(1.5)
-    print( time.time() - start)
+    trader.parallel_shopping(1)
+    time.sleep(2.0)
+
 
 
 exit()
