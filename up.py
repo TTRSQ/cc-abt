@@ -351,6 +351,7 @@ class Trader:
         self.th1 = threading.Thread()
         self.threshold = {'size': 0.1, 'price' : 2000}
         self.cart = 0
+        self.time = time.time()
 
     def disp_balance(self):
         print(self.ex0.exchange.name, self.ex0.balance)
@@ -436,6 +437,9 @@ class Trader:
         self.update_board(exchange)
         self.cart += 1
         if self.cart == 2:
+            now = time.time()
+            print(now - self.time, self.ex1.board['bids'][0]['price'], self.ex0.board['asks'][0]['price'])
+            self.time = now
             self.cart = 0
             sp = self.get_negative_spread(self.threshold["size"])
             size = trader.max_trade_amount(self.threshold["size"], 0.8)
@@ -450,15 +454,20 @@ class Trader:
 
 
     def parallel_shopping(self, exec):
+        self.time = time.time()
         self.th0 = threading.Thread(name="ex0", target=self.shopping, args=(self.ex0, exec, ))
         self.th1 = threading.Thread(name="ex1", target=self.shopping, args=(self.ex1, exec, ))
         self.th0.start()
         self.th1.start()
 
-for i in range(1000):
+print('開始')
+
+for i in range(10):
     trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-    trader.parallel_shopping(1)
+    trader.parallel_shopping(0)
     time.sleep(2.0)
+
+print('正常終了')
 
 
 
