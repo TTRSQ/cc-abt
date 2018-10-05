@@ -415,10 +415,10 @@ class Trader:
         t2 = min(self.ex1.balance['jpy']/et1['ask'], self.ex0.balance['btc'])
         return {1: t1*rate, 2: t2*rate}
 
-    def max_effective_size(self, spread, rate=1.0):
-        return {1: self.get_mes(1, spread)*rate, 2: self.get_mes(2, spread)}
-
     # 上の関数と似ているがこちらはどこまでのサイズなら有効なスプレッドであるかをさす。
+    def max_effective_size(self, spread, rate=1.0):
+        return {1: self.get_mes(1, spread)*rate, 2: self.get_mes(2, spread)*rate}
+
     def get_mes(self, dir, spread):
         bids = []
         asks = []
@@ -467,15 +467,20 @@ class Trader:
         self.cart += 1
         if self.cart == 2:
             self.cart = 0
+            now = str(int(datetime.now().timestamp()))
             mes = self.max_effective_size(self.threshold['price'], 1.0)
             if mes[1] > mes[2]:
                 if mes[1] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[1], 1.0)
+                    self.f.write('\n'+now+' dir1 '+str(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price'])+'\n')
+                    self.f.write('size: {mta:'+str(mta[1]*0.8)+', mes:'+str(mes[1]*0.8)+'\n')
                     self.trade(1, min(mta[1]*0.8, mes[1]*0.8), exec)
             else:
                 if mes[2] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[2], 1.0)
-                    self.trade(2, min(mta[1]*0.8, mes[1]*0.8), exec)
+                    self.f.write('\n'+now+' dir2 '+str(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price'])+'\n')
+                    self.f.write('size: {mta:'+str(mta[2]*0.8)+', mes:'+str(mes[2]*0.8)+'\n')
+                    self.trade(2, min(mta[2]*0.8, mes[2]*0.8), exec)
 
 
     def parallel_shopping(self, exec):
@@ -485,9 +490,9 @@ class Trader:
         self.th1.start()
 
 
-for i in range(1800*24):
+for i in range(1800*24*2):
     trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-    trader.parallel_shopping(0)
+    trader.parallel_shopping(1)
     time.sleep(2.0)
     trader.f.close()
 
