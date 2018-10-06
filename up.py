@@ -225,6 +225,8 @@ class BitBank(ExchangeCharacterBase):
         self.formatter['balance'] = self.format_balance
         self.formatter['order'] = self.format_order
         self.prepare_dic["order"] = self.prepare_order
+        self.nonce = 0
+        self.last_req_stamp = 0
 
     def make_request(self, command, param):
         param = self.prepare(command, param)
@@ -238,9 +240,16 @@ class BitBank(ExchangeCharacterBase):
 
         if not is_public:
             header['ACCESS-KEY'] = self.api_key
-            unix_stamp = str(int(datetime.now().timestamp()))
-            header['ACCESS-NONCE'] = unix_stamp
-            raw_sign = unix_stamp
+            unix_int = int(datetime.now().timestamp())
+            # nonce が一桁である前提
+            if self.last_req_stamp == unix_int:
+                self.nonce += 1
+            else:
+                self.nonce = 0
+            self.last_req_stamp = unix_int
+            access_nonce = str(self.last_req_stamp)+str(self.nonce)
+            header['ACCESS-NONCE'] = access_nonce
+            raw_sign = access_nonce
             if is_get:
                 raw_sign += self.api_list[command]['path']
             else:
@@ -349,7 +358,7 @@ class Trader:
         self.ex1.get_balance()
         self.th0 = threading.Thread()
         self.th1 = threading.Thread()
-        self.threshold = {'size': 0.001, 'price' : 1500}
+        self.threshold = {'size': 0.001, 'price' : 1500, 'bias': 1000}
         self.cart = 0
         self.f = open("../tmp/log", "a")
 
@@ -371,6 +380,7 @@ class Trader:
         if size < self.threshold['size']:
             return
         if exec:
+            self.f.write('exec'+ now + exchange.exchange.name + '\n')
             exchange.order({
                 'size' : size,
                 'side' : side
@@ -416,8 +426,8 @@ class Trader:
         return {1: t1*rate, 2: t2*rate}
 
     # 上の関数と似ているがこちらはどこまでのサイズなら有効なスプレッドであるかをさす。
-    def max_effective_size(self, spread, rate=1.0):
-        return {1: self.get_mes(1, spread)*rate, 2: self.get_mes(2, spread)*rate}
+    def max_effective_size(self, spread, bias, rate=1.0):
+        return {1: self.get_mes(1, spread + bias)*rate, 2: self.get_mes(2, spread - bias)*rate}
 
     def get_mes(self, dir, spread):
         bids = []
@@ -468,18 +478,18 @@ class Trader:
         if self.cart == 2:
             self.cart = 0
             now = str(int(datetime.now().timestamp()))
-            mes = self.max_effective_size(self.threshold['price'], 1.0)
+            mes = self.max_effective_size(self.threshold['price'], self.threshold['bias'], 1.0)
             if mes[1] > mes[2]:
                 if mes[1] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[1], 1.0)
                     self.f.write('\n'+now+' dir1 '+str(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price'])+'\n')
-                    self.f.write('size: {mta:'+str(mta[1]*0.8)+', mes:'+str(mes[1]*0.8)+'\n')
+                    self.f.write('size: {mta:'+str(mta[1]*0.8)+', mes:'+str(mes[1]*0.8)+'}\n')
                     self.trade(1, min(mta[1]*0.8, mes[1]*0.8), exec)
             else:
                 if mes[2] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[2], 1.0)
                     self.f.write('\n'+now+' dir2 '+str(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price'])+'\n')
-                    self.f.write('size: {mta:'+str(mta[2]*0.8)+', mes:'+str(mes[2]*0.8)+'\n')
+                    self.f.write('size: {mta:'+str(mta[2]*0.8)+', mes:'+str(mes[2]*0.8)+'}\n')
                     self.trade(2, min(mta[2]*0.8, mes[2]*0.8), exec)
 
 
