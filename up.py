@@ -69,6 +69,10 @@ class ExchangeCharacterBase:
         response_dic = {}
         with urllib.request.urlopen(request) as response:
             response_dic = json.loads( response.read().decode("utf-8") )
+        if command == "order":
+            f = open("/home/tatsuya/tmp/log", "a")
+            f.write(json.dumps(response_dic)+"\n")
+            f.close()
         return response_dic
 
     # 関数の返値を成形
@@ -358,9 +362,12 @@ class Trader:
         self.ex1.get_balance()
         self.th0 = threading.Thread()
         self.th1 = threading.Thread()
-        self.threshold = {'size': 0.001, 'price' : 1500, 'bias': 1000}
+        self.threshold = {'size': 0.001, 'price' : 700, 'bias': 200}
         self.cart = 0
-        self.f = open("../tmp/log", "a")
+        self.f = open("/home/tatsuya/tmp/log", "a")
+
+    def __del__(self):
+        self.f.close()
 
     def disp_balance(self):
         print(self.ex0.exchange.name, self.ex0.balance)
@@ -380,7 +387,6 @@ class Trader:
         if size < self.threshold['size']:
             return
         if exec:
-            self.f.write('exec'+ now + exchange.exchange.name + '\n')
             exchange.order({
                 'size' : size,
                 'side' : side
@@ -450,11 +456,15 @@ class Trader:
             if bid_s < ask_s:
                 size += bid_s
                 bid_id += 1
+                if bid_id == len(bids):
+                    break
                 bid_s = bids[bid_id]['size']
                 bid_p = bids[bid_id]['price']
             else:
                 size += ask_s
                 ask_id += 1
+                if ask_id == len(asks):
+                    break
                 ask_s = asks[ask_id]['size']
                 ask_p = asks[ask_id]['price']
 
@@ -504,7 +514,6 @@ for i in range(1800*24*2):
     trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
     trader.parallel_shopping(1)
     time.sleep(2.0)
-    trader.f.close()
 
 
 
