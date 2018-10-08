@@ -4,7 +4,7 @@ import os
 import mysql.connector
 import urllib.request
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import hmac
 import hashlib
@@ -27,6 +27,11 @@ class Exchange:
 
     def order(self, param):
         command = 'order'
+
+        # 丸め込みをする(小数点以下8桁)
+        round = 100000000
+        param['size'] = ( 1.0*int(param['size']*round) )/round
+
         self.last_order = self.exchange.format(command, self.exchange.hit_api(command, param))
 
     def order_list(self):
@@ -362,7 +367,7 @@ class Trader:
         self.ex1.get_balance()
         self.th0 = threading.Thread()
         self.th1 = threading.Thread()
-        self.threshold = {'size': 0.001, 'price' : 700, 'bias': 200}
+        self.threshold = {'size': 0.001, 'price' : 1000, 'bias': 500}
         self.cart = 0
         self.f = open("/home/tatsuya/tmp/log", "a")
 
@@ -511,8 +516,13 @@ class Trader:
 
 
 for i in range(1800*24*2):
-    trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-    trader.parallel_shopping(1)
+    now = datetime.now() + timedelta(hours=9)
+    # 04:00 - 4:10の期間は bitflyer がメンテ中
+    if now.hour == 4 and 0 <= now.minute and now.minute <= 10:
+        pass
+    else:
+        trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
+        trader.parallel_shopping(1)
     time.sleep(2.0)
 
 
