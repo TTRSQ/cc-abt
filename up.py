@@ -586,6 +586,7 @@ class Trader:
         self.th0.start()
         self.th1.start()
 
+# 手数料の取得のためにインスタンスを作成して破棄
 trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
 trader.get_commission()
 trader = None
@@ -594,10 +595,18 @@ time.sleep(2.0)
 
 for i in range(1800*24*2):
     now = datetime.now() + timedelta(hours=9)
-    # 04:00 - 4:10の期間は bitflyer がメンテ中
+
     if now.hour == 4 and 0 <= now.minute and now.minute <= 10:
+        # 04:00 - 4:10の期間は bitflyer がメンテ中
         pass
+    elif now.hour == 0 and 0 <= now.minute and now.minute <= 10:
+        # この時間は手数料の更新が行われるので手数料を取得してから取引
+        trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
+        trader.get_commission()
+        time.sleep(2.0)
+        trader.parallel_shopping(1)
     else:
+        # 通常
         trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
         trader.parallel_shopping(1)
     time.sleep(2.0)
