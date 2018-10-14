@@ -9,6 +9,15 @@ import threading
 import hmac
 import hashlib
 
+class Logger:
+    def __init__(self, path):
+        self.path = path
+
+    def log(self, str):
+        f = open(self.path, "a")
+        f.write(str+"\n")
+        f.close()
+
 # 取引所に命令を送るためのクラス(状態保有あり)
 class Exchange:
     def __init__(self, exchange):
@@ -64,6 +73,7 @@ class ExchangeCharacterBase:
     commission = 0
 
     def __init__(self, default):
+        self.logger = Logger('/home/tatsuya/tmp/log')
         self.url_public  = default['url_public']
         self.url_private = default['url_private']
         self.api_list    = default['api_list']
@@ -82,9 +92,7 @@ class ExchangeCharacterBase:
         with urllib.request.urlopen(request) as response:
             response_dic = json.loads( response.read().decode("utf-8") )
         if command == "order":
-            f = open("/home/tatsuya/tmp/log", "a")
-            f.write(json.dumps(response_dic)+"\n")
-            f.close()
+            self.logger.log(json.dumps(response_dic))
         return response_dic
 
     # 取引所ごとに扱える最小桁数が違う
@@ -404,9 +412,11 @@ def insert(db, table, dic):
     db.commit()
     db.quit_cursor()
 
+
 class Trader:
 
     def __init__(self, exchange0, exchange1):
+        self.logger = Logger('/home/tatsuya/tmp/log')
         self.ex0 = exchange0
         self.ex1 = exchange1
         self.ex0.get_balance()
@@ -417,10 +427,6 @@ class Trader:
         self.th11 = threading.Thread()
         self.threshold = {'size': 0.001, 'price' : 1000, 'bias': 500}
         self.cart = 0
-        self.f = open("/home/tatsuya/tmp/log", "a")
-
-    def __del__(self):
-        self.f.close()
 
     def disp_balance(self):
         print(self.ex0.exchange.name, self.ex0.balance)
@@ -449,10 +455,10 @@ class Trader:
                 'side' : side
             })
 
-            self.f.write(now + ' ' + exchange.exchange.name + ' ' + side + ' ' + str(size) + '\n')
             price = self.get_mean_value_from_size(size ,exchange)
             bid_ask = 'bid' if side == 'sell' else 'ask'
-            self.f.write(exchange.exchange.name + ' expect price:'+ str(price[bid_ask]) + '\n')
+            self.logger.log(now + ' ' + exchange.exchange.name + ' ' + side + ' ' + str(size))
+            self.logger.log(exchange.exchange.name + ' expect price:'+ str(price[bid_ask]))
 
             # 指値でリトライ
             if exchange.last_order['success'] == 0 and exchange.last_order['retry']:
@@ -463,7 +469,7 @@ class Trader:
                 })
 
         else:
-            self.f.write(now + exchange.exchange.name + side + str(size) + '\n')
+            self.logger.log(now + exchange.exchange.name + side + str(size))
 
     def get_mean_value_from_size(self, size, exchange):
         calc_size = 0.0
@@ -569,14 +575,14 @@ class Trader:
             if mes[1] > mes[2]:
                 if mes[1] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[1], 1.0)
-                    self.f.write('\n'+now+' dir1 '+str(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price'])+'\n')
-                    self.f.write('size: {mta:'+str(mta[1]*0.5)+', mes:'+str(mes[1]*0.8)+'}\n\n')
+                    self.logger.log('\n' + now + ' dir1 ' + str(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price']))
+                    self.logger.log('size: {mta:' + str(mta[1]*0.5) + ', mes:' + str(mes[1]*0.8) + '}')
                     self.trade(1, min(mta[1]*0.5, mes[1]*0.8), exec)
             else:
                 if mes[2] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[2], 1.0)
-                    self.f.write('\n'+now+' dir2 '+str(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price'])+'\n')
-                    self.f.write('size: {mta:'+str(mta[2]*0.5)+', mes:'+str(mes[2]*0.8)+'}\n\n')
+                    self.logger.log('\n' + now + ' dir2 ' + str(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price']))
+                    self.logger.log('size: {mta:' + str(mta[2]*0.5) + ', mes:' + str(mes[2]*0.8) + '}')
                     self.trade(2, min(mta[2]*0.5, mes[2]*0.8), exec)
 
 
@@ -600,11 +606,10 @@ for i in range(1800*24*2):
         # 04:00 - 4:10の期間は bitflyer がメンテ中
         pass
     elif now.hour == 0 and 0 <= now.minute and now.minute <= 10:
-        # この時間は手数料の更新が行われるので手数料を取得してから取引
+        # この時間は手数料の更新が行われる
         trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
         trader.get_commission()
         time.sleep(2.0)
-        trader.parallel_shopping(1)
     else:
         # 通常
         trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
@@ -612,3 +617,4 @@ for i in range(1800*24*2):
     time.sleep(2.0)
 
 exit()
+
