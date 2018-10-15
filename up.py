@@ -1,4 +1,3 @@
-# coding: utf-8
 import time
 import os
 import mysql.connector
@@ -123,8 +122,10 @@ class ExchangeCharacterBase:
 class BitFlyer(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitFlyer'
-        self.api_key = os.environ['BF_KEY']
-        self.api_key_s = os.environ['BF_KEY_S']
+        with open("/home/tatsuya/app/config.secret", "r") as f:
+            key_data = json.load(f)[self.name]
+            self.api_key = key_data['KEY']
+            self.api_key_s = key_data['S_KEY']
         default = {
             'url_public'  : 'https://api.bitflyer.com',
             'url_private' : 'https://api.bitflyer.com',
@@ -240,8 +241,10 @@ class BitFlyer(ExchangeCharacterBase):
 class BitBank(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitBank'
-        self.api_key = os.environ['BB_KEY']
-        self.api_key_s = os.environ['BB_KEY_S']
+        with open("/home/tatsuya/app/config.secret", "r") as f:
+            key_data = json.load(f)[self.name]
+            self.api_key = key_data['KEY']
+            self.api_key_s = key_data['S_KEY']
         default = {
             'url_public'  : 'https://public.bitbank.cc',
             'url_private' : 'https://api.bitbank.cc',
@@ -592,29 +595,27 @@ class Trader:
         self.th0.start()
         self.th1.start()
 
-# 手数料の取得のためにインスタンスを作成して破棄
+#手数料の取得のためにインスタンスを作成して破棄
 trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
 trader.get_commission()
 trader = None
 
 time.sleep(2.0)
 
-for i in range(1800*24*2):
+while(True):
     now = datetime.now() + timedelta(hours=9)
 
     if now.hour == 4 and 0 <= now.minute and now.minute <= 10:
         # 04:00 - 4:10の期間は bitflyer がメンテ中
         pass
-    elif now.hour == 0 and 0 <= now.minute and now.minute <= 10:
-        # この時間は手数料の更新が行われる
-        trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-        trader.get_commission()
-        time.sleep(2.0)
+    elif now.hour == 0 and 0 <= now.minute and now.minute <= 9:
+        # プログラムを終了する
+        break
     else:
         # 通常
         trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
         trader.parallel_shopping(1)
     time.sleep(2.0)
 
-exit()
+
 
