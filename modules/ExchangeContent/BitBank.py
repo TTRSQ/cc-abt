@@ -1,8 +1,12 @@
+import exchange_base
+
 class BitBank(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitBank'
-        self.api_key = os.environ['BB_KEY']
-        self.api_key_s = os.environ['BB_KEY_S']
+        with open("/home/tatsuya/app/config.secret", "r") as f:
+            key_data = json.load(f)[self.name]
+            self.api_key = key_data['KEY']
+            self.api_key_s = key_data['S_KEY']
         default = {
             'url_public'  : 'https://public.bitbank.cc',
             'url_private' : 'https://api.bitbank.cc',
@@ -72,6 +76,9 @@ class BitBank(ExchangeCharacterBase):
         else:
             return urllib.request.Request(url, method=method, headers=header)
 
+    def my_commission(self):
+        return BitBank.commission
+
     def format(self, command, values):
         return self.formatter[command](values)
 
@@ -91,13 +98,25 @@ class BitBank(ExchangeCharacterBase):
         return ret_value
 
     def format_order(self, values):
-        ret_value = {
-            'side'       : values['data']['side'],
-            'size'       : values['data']['start_amount'],
-            'created_at' : values['data']['ordered_at'],
-            'success'    : values['success'],
-        }
-        return ret_value
+        if values['success']:
+            ret_value = {
+                'side'       : values['data']['side'],
+                'size'       : values['data']['start_amount'],
+                'created_at' : values['data']['ordered_at'],
+                'success'    : values['success'],
+            }
+            return ret_value
+        else:
+            if values['data']['code'] == 70009:
+                return {"success": 0 , "retry": 1}
+            else:
+                return {"success": 0 , "retry": 0}
+
+    # bitbankは小数点以下4桁まで 以降切り捨て
+    def round_order_size(self, size):
+        # 丸め込みをする(小数点以下8桁)
+        round = 10000
+        return ( 1.0*int(size*round) )/round
 
 
     def prepare(self, command, params):

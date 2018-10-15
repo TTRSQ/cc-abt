@@ -1,8 +1,12 @@
+import exchange_base
+
 class BitFlyer(ExchangeCharacterBase):
     def __init__(self):
         self.name = 'BitFlyer'
-        self.api_key = os.environ['BF_KEY']
-        self.api_key_s = os.environ['BF_KEY_S']
+        with open("/home/tatsuya/app/config.secret", "r") as f:
+            key_data = json.load(f)[self.name]
+            self.api_key = key_data['KEY']
+            self.api_key_s = key_data['S_KEY']
         default = {
             'url_public'  : 'https://api.bitflyer.com',
             'url_private' : 'https://api.bitflyer.com',
@@ -22,8 +26,8 @@ class BitFlyer(ExchangeCharacterBase):
                     'method' : api_config['method']['post'],
                     'type'   : api_config['type']['private']
                 },
-                'permissions' : {
-                    'path'   : '/v1/me/getpermissions',
+                'commission' : {
+                    'path'   : '/v1/me/gettradingcommission?product_code=BTC_JPY',
                     'method' : api_config['method']['get'],
                     'type'   : api_config['type']['private']
                 }
@@ -41,7 +45,6 @@ class BitFlyer(ExchangeCharacterBase):
         }
         url = self.url_public + self.api_list[command]['path']
         method = 'GET' if self.api_list[command]['method'] == api_config['method']['get'] else 'POST'
-
         if self.api_list[command]['type'] == api_config['type']['private']:
             header['ACCESS-KEY'] = self.api_key
             unix_stamp = str(int(datetime.now().timestamp()))
@@ -55,6 +58,13 @@ class BitFlyer(ExchangeCharacterBase):
             return urllib.request.Request(url, method=method, headers=header, data=json.dumps(param).encode('utf-8'))
         else:
             return urllib.request.Request(url, method=method, headers=header)
+
+    def get_commission(self):
+        res = self.hit_api('commission')
+        BitFlyer.commission = res['commission_rate']
+
+    def my_commission(self):
+        return BitFlyer.commission
 
     def format(self, command, values):
         return self.formatter[command](values)
@@ -70,6 +80,7 @@ class BitFlyer(ExchangeCharacterBase):
     def format_order(self, values):
         ret_value = {
             'success'    : 1 if 'child_order_acceptance_id' else 0,
+            'retry'      : 0,
             'created_at' : int(datetime.now().timestamp()*1000)
         }
         return ret_value
@@ -78,6 +89,15 @@ class BitFlyer(ExchangeCharacterBase):
         return self.prepare_dic[command](params)
 
     def prepare_order(self, params):
+        # 手数料があるので購入は多く、売却は少なく
+        if params['side'] == 'buy':
+            params['size'] /= (1-BitFlyer.commission)
+        else:
+            params['size'] /= (1+BitFlyer.commission)
+
+        round = 100000000
+        params['size'] = ( 1.0*int(params['size']*round) )/round
+
         if 'price' in params:
             return {
                 "product_code": "BTC_JPY",

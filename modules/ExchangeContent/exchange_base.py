@@ -1,7 +1,27 @@
+import json
+import urllib.request
+from datetime import datetime, timedelta
+import hmac
+import hashlib
+
+# グローバル変数
+api_config = {
+    'method' : {
+        'get'  : 1,
+        'post' : 2
+    },
+    'type' : {
+        'public'  : 1,
+        'private' : 2
+    }
+}
+
 # 固有取引所カセットが継承するクラス
 class ExchangeCharacterBase:
+    commission = 0
 
     def __init__(self, default):
+        self.logger = Logger('/home/tatsuya/tmp/log')
         self.url_public  = default['url_public']
         self.url_private = default['url_private']
         self.api_list    = default['api_list']
@@ -20,10 +40,16 @@ class ExchangeCharacterBase:
         with urllib.request.urlopen(request) as response:
             response_dic = json.loads( response.read().decode("utf-8") )
         if command == "order":
-            f = open("/home/tatsuya/tmp/log", "a")
-            f.write(json.dumps(response_dic)+"\n")
-            f.close()
+            self.logger.log(json.dumps(response_dic))
         return response_dic
+
+    # 取引所ごとに扱える最小桁数が違う
+    def round_order_size(self, size):
+        return size
+
+    # 手数料の取得(あればオーバーライド)
+    def get_commission(self):
+        ExchangeCharacterBase.commission = 0
 
     # 関数の返値を成形
     @staticmethod

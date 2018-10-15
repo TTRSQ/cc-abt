@@ -1,3 +1,5 @@
+import mysql.connector
+
 class SqlController:
 
     def __init__(self):
