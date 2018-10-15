@@ -1,6 +1,7 @@
 import threading
 from datetime import datetime, timedelta
 import Exchange
+import Logger
 
 class Arbitrager:
 
