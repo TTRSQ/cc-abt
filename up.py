@@ -1,11 +1,19 @@
 import time
+import sys
+sys.path.append('/home/tatsuya/app/modules')
+sys.path.append('/home/tatsuya/app/modules/Util')
+sys.path.append('/home/tatsuya/app/modules/ExchangeContent')
 from datetime import datetime, timedelta
+from Arbitrager import Arbitrager
+from Exchange import Exchange
+from BitFlyer import BitFlyer
+from BitBank  import BitBank
 
 
 #手数料の取得のためにインスタンスを作成して破棄
-trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-trader.get_commission()
-trader = None
+arbitrager = Arbitrager(Exchange(BitFlyer()), Exchange(BitBank()))
+arbitrager.get_commission()
+arbitrager = None
 time.sleep(2.0)
 
 # メインループ発火
@@ -20,7 +28,7 @@ while(True):
         break
     else:
         # 通常
-        trader = Trader(Exchange(BitFlyer()), Exchange(BitBank()))
-        trader.parallel_shopping(1)
+        arbitrager = Arbitrager(Exchange(BitFlyer()), Exchange(BitBank()))
+        arbitrager.parallel_shopping(1)
     time.sleep(2.0)
 
