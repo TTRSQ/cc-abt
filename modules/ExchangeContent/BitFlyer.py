@@ -1,4 +1,4 @@
-import exchange_base
+from exchange_base import ExchangeCharacterBase
 
 class BitFlyer(ExchangeCharacterBase):
     def __init__(self):

@@ -3,7 +3,7 @@ import urllib.request
 from datetime import datetime, timedelta
 import hmac
 import hashlib
-import Logger
+from Logger import Logger
 
 # グローバル変数
 api_config = {

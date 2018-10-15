@@ -1,4 +1,4 @@
-import exchange_base
+from exchange_base import ExchangeCharacterBase
 
 class BitBank(ExchangeCharacterBase):
     def __init__(self):
