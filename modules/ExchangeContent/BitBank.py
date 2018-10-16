@@ -2,8 +2,8 @@ import json
 import urllib.request
 import hmac
 import hashlib
-from datetime import datetime
-from exchange_base import ExchangeCharacterBase, api_config
+from datetime import datetime, timedelta, timezone
+from exchange_base import ExchangeCharacterBase, api_config, JST
 
 class BitBank(ExchangeCharacterBase):
     def __init__(self):
@@ -58,7 +58,7 @@ class BitBank(ExchangeCharacterBase):
 
         if not is_public:
             header['ACCESS-KEY'] = self.api_key
-            unix_int = int(datetime.now().timestamp())
+            unix_int = int(datetime.now(JST).timestamp())
             # nonce が一桁である前提
             if self.last_req_stamp == unix_int:
                 self.nonce += 1

@@ -2,8 +2,8 @@ import json
 import urllib.request
 import hmac
 import hashlib
-from datetime import datetime
-from exchange_base import ExchangeCharacterBase, api_config
+from datetime import datetime, timedelta, timezone
+from exchange_base import ExchangeCharacterBase, api_config, JST
 
 class BitFlyer(ExchangeCharacterBase):
     def __init__(self):
@@ -52,7 +52,7 @@ class BitFlyer(ExchangeCharacterBase):
         method = 'GET' if self.api_list[command]['method'] == api_config['method']['get'] else 'POST'
         if self.api_list[command]['type'] == api_config['type']['private']:
             header['ACCESS-KEY'] = self.api_key
-            unix_stamp = str(int(datetime.now().timestamp()))
+            unix_stamp = str(int(datetime.now(JST).timestamp()))
             header['ACCESS-TIMESTAMP'] = unix_stamp
             raw_sign = unix_stamp + method + self.api_list[command]['path']
             # param が空出ない場合 raw_signにparamの文字列が追加される

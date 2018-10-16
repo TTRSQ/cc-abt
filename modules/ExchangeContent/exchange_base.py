@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from Logger import Logger
 
 # グローバル変数
@@ -14,6 +14,7 @@ api_config = {
         'private' : 2
     }
 }
+JST = timezone(timedelta(hours=+9), 'JST')
 
 # 固有取引所カセットが継承するクラス
 class ExchangeCharacterBase:

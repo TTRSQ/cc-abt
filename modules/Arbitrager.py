@@ -1,5 +1,4 @@
 import threading
-from datetime import datetime, timedelta
 from Exchange import Exchange
 from Logger import Logger
 
@@ -36,7 +35,6 @@ class Arbitrager:
         self.board_is_new = 0
 
     def order(self, exchange, side, size, exec):
-        now = (datetime.now() + timedelta(hours=9)).strftime("%Y/%m/%d %H:%M:%S")
         if size < self.threshold['size']:
             return
         if exec:
@@ -47,8 +45,6 @@ class Arbitrager:
 
             price = self.get_mean_value_from_size(size ,exchange)
             bid_ask = 'bid' if side == 'sell' else 'ask'
-            self.logger.log(now + ' ' + exchange.exchange.name + ' ' + side + ' ' + str(size))
-            self.logger.log(exchange.exchange.name + ' expect price:'+ str(price[bid_ask]))
 
             # 指値でリトライ
             if exchange.last_order['success'] == 0 and exchange.last_order['retry']:
@@ -58,8 +54,6 @@ class Arbitrager:
                     'side'  : side
                 })
 
-        else:
-            self.logger.log(now + exchange.exchange.name + side + str(size))
 
     def get_mean_value_from_size(self, size, exchange):
         calc_size = 0.0
@@ -146,6 +140,7 @@ class Arbitrager:
         round_size0 = self.ex0.round_order_size(size)
         round_size1 = self.ex1.round_order_size(size)
         size = min(round_size0, round_size1)
+        self.logger.log('dir:' + str(dir) + ', size:' + str(size) )
         if dir == 1:
             self.th00 = threading.Thread(name="ex0", target=self.order, args=(self.ex0, 'buy' , size, exec, ))
             self.th11 = threading.Thread(name="ex1", target=self.order, args=(self.ex1, 'sell', size, exec, ))
@@ -160,19 +155,14 @@ class Arbitrager:
         self.cart += 1
         if self.cart == 2:
             self.cart = 0
-            now = (datetime.now() + timedelta(hours=9)).strftime("%Y/%m/%d %H:%M:%S")
             mes = self.max_effective_size(self.threshold['price'], self.threshold['bias'], 1.0)
             if mes[1] > mes[2]:
                 if mes[1] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[1], 1.0)
-                    self.logger.log('\n' + now + ' dir1 ' + str(self.ex1.board['bids'][0]['price']-self.ex0.board['asks'][0]['price']))
-                    self.logger.log('size: {mta:' + str(mta[1]*0.5) + ', mes:' + str(mes[1]*0.8) + '}')
                     self.trade(1, min(mta[1]*0.5, mes[1]*0.8), exec)
             else:
                 if mes[2] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[2], 1.0)
-                    self.logger.log('\n' + now + ' dir2 ' + str(self.ex0.board['bids'][0]['price']-self.ex1.board['asks'][0]['price']))
-                    self.logger.log('size: {mta:' + str(mta[2]*0.5) + ', mes:' + str(mes[2]*0.8) + '}')
                     self.trade(2, min(mta[2]*0.5, mes[2]*0.8), exec)
 
 
