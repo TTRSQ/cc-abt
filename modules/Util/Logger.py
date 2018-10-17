@@ -5,7 +5,8 @@ class Logger:
     def __init__(self, path):
         self.path = path
 
-    def log(self, str):
+    def log(self, log_str):
         f = open(self.path, "a")
-        f.write(str(datetime.now(Logger.JST))+' '+str+"\n")
+        f.write(str(datetime.now(Logger.JST))+' '+log_str+"\n")
         f.close()
+
