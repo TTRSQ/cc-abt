@@ -35,8 +35,6 @@ class Arbitrager:
         self.board_is_new = 0
 
     def order(self, exchange, side, size, exec):
-        if size < self.threshold['size']:
-            return
         if exec:
             exchange.order({
                 'size' : size,
@@ -89,7 +87,7 @@ class Arbitrager:
         et1 = self.get_mean_value_from_size(size, self.ex1)
         t1 = min(self.ex0.balance['jpy']/et0['ask'], self.ex1.balance['btc'])
         t2 = min(self.ex1.balance['jpy']/et1['ask'], self.ex0.balance['btc'])
-        return {1: t1*rate, 2: t2*rate}
+        return {1: t1*rate, 2: t2*rate, 'extra': {'ex0': et0, 'ex1': et1}}
 
     # 上の関数と似ているがこちらはどこまでのサイズなら有効なスプレッドであるかをさす。
     def max_effective_size(self, spread, bias, rate=1.0):
@@ -140,7 +138,6 @@ class Arbitrager:
         round_size0 = self.ex0.round_order_size(size)
         round_size1 = self.ex1.round_order_size(size)
         size = min(round_size0, round_size1)
-        self.logger.log('dir:' + str(dir) + ', size:' + str(size) )
         if dir == 1:
             self.th00 = threading.Thread(name="ex0", target=self.order, args=(self.ex0, 'buy' , size, exec, ))
             self.th11 = threading.Thread(name="ex1", target=self.order, args=(self.ex1, 'sell', size, exec, ))
@@ -159,11 +156,19 @@ class Arbitrager:
             if mes[1] > mes[2]:
                 if mes[1] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[1], 1.0)
-                    self.trade(1, min(mta[1]*0.5, mes[1]*0.8), exec)
+                    size = min(mta[1]*0.5, mes[1]*0.8)
+                    if size < self.threshold['size']:
+                        return
+                    self.trade(1, size, exec)
+                    self.logger.log('dir:1, size:' + str(size) + ', price:' + str(mta['extra']['ex0']['ask']) + ' -> ' + str(mta['extra']['ex1']['bid']))
             else:
                 if mes[2] > self.threshold['size']:
                     mta = self.max_trade_amount(mes[2], 1.0)
-                    self.trade(2, min(mta[2]*0.5, mes[2]*0.8), exec)
+                    size = min(mta[2]*0.5, mes[2]*0.8)
+                    if size < self.threshold['size']:
+                        return
+                    self.trade(2, size, exec)
+                    self.logger.log('dir:2, size:' + str(size) + ', price:' + str(mta['extra']['ex1']['ask']) + ' -> ' + str(mta['extra']['ex0']['bid']))
 
 
     def parallel_shopping(self, exec):
